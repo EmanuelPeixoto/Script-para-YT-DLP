@@ -91,7 +91,7 @@ CriaEVerifica(){
 		2) MP3L ;;
 		3) MP4A ;;
 		4) MP3A ;;
-		9) echo "Criado por Emanuel Peixoto" ; echo ; echo "github.com/EmanuelPeixoto" ; echo "Esse software necessita do FFmpeg e YT-DLP instalado" ; echo ; echo "Pressione ENTER para voltar para o Menu principal." ; read ; Menu ;;
+		9) clear ; echo "Criado por Emanuel Peixoto" ; echo ; echo "github.com/EmanuelPeixoto" ; echo "Esse software necessita do FFmpeg e YT-DLP instalado" ; echo ; echo "Pressione ENTER para voltar para o Menu principal." ; read ; Menu ;;
 		0) SAIR ;;
 		*) echo ; echo "Opção desconhecida." ; sleep 2 ; Menu ;;
 		
