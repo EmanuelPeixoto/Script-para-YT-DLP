@@ -1,10 +1,10 @@
 CriaEVerifica(){
  echo "Verificando se existem os arquivos necessários"
 
-    TEXTMP4L="-f best --recode-video mp4 -P ./Downloads # Melhor qualidade sempre - Força salvar vídeo em mp4 - Seleciona pasta para salvar"
-    TEXTMP3L="-f best -x --audio-format mp3 -P ./Downloads # Melhor qualidade sempre - Só áudio - Força salvar audio em mp3 - Seleciona pasta para salvar"
-    TEXTMP4A="-f best --recode-video mp4 -a lista.txt -P ./Downloads # Melhor qualidade sempre - Força salvar vídeo em mp4 - Ler arquivos em lotes - Seleciona pasta para salvar"
-    TEXTMP3A="-f best -x --audio-format mp3 -a lista.txt -P ./Downloads # Melhor qualidade sempre - Só audio - Força salvar audio em mp3 - Ler arquivos em lotes - Seleciona pasta para salvar"
+    TEXTMP4L="--recode-video mp4 -P ./Downloads # Melhor qualidade sempre - Força salvar vídeo em mp4 - Seleciona pasta para salvar"
+    TEXTMP3L="-x --audio-format mp3 -P ./Downloads # Melhor qualidade sempre - Só áudio - Força salvar audio em mp3 - Seleciona pasta para salvar"
+    TEXTMP4A="--recode-video mp4 -a lista.txt -P ./Downloads # Melhor qualidade sempre - Força salvar vídeo em mp4 - Ler arquivos em lotes - Seleciona pasta para salvar"
+    TEXTMP3A="-x --audio-format mp3 -a lista.txt -P ./Downloads # Melhor qualidade sempre - Só audio - Força salvar audio em mp3 - Ler arquivos em lotes - Seleciona pasta para salvar"
 
     if [ -d ./Downloads ];
     then 
@@ -153,13 +153,13 @@ CriaEVerifica(){
     echo "O arquivo já existe."
     echo
     echo "Feche o bloco de notas ao terminar de editar o arquivo."
-    notepad.exe ./lista.txt
+    nvim ./lista.txt
     else
     echo "Criando arquivo."
     touch lista.txt
     echo
     echo "Feche o bloco de notas ao terminar de editar o arquivo."
-    notepad.exe ./lista.txt
+    nvim ./lista.txt
     fi
     echo
     echo
