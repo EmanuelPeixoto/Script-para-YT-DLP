@@ -12,12 +12,10 @@ declare -A CONFIG_OPTIONS=(
   ["MP3"]="-x --audio-format mp3 -P $DOWNLOAD_DIR -q"
 )
 
-# Function to create necessary directories
 setup_environment() {
   mkdir -p "$DOWNLOAD_DIR"
 }
 
-# Function to display menu and get user choice
 show_menu() {
   clear
   cat << EOF
@@ -40,7 +38,6 @@ EOF
   return "$choice"
 }
 
-# Function to handle single downloads
 download() {
   local mode=$1
   echo -n "Enter the link: "
@@ -51,7 +48,6 @@ download() {
   yt-dlp ${CONFIG_OPTIONS[$mode]} "$link"
 }
 
-# Function to handle playlist downloads
 youtube_playlist_download() {
   local mode=$1
   echo -n "Enter the playlist link: "
