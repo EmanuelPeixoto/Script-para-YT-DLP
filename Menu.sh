@@ -6,11 +6,13 @@ BATCH_FILE="./batch_links.txt"
 EDITOR="${EDITOR:-nvim}"
 MAX_PARALLEL_DOWNLOADS=5
 
-# YT-DLP configuration options
-declare -A CONFIG_OPTIONS=(
-  ["MP4"]="--recode-video mp4 -P $DOWNLOAD_DIR -f 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]' -q"
-  ["MP3"]="-x --audio-format mp3 -P $DOWNLOAD_DIR -q"
-)
+download_mp4() {
+  yt-dlp --recode-video mp4 -P "$DOWNLOAD_DIR" -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]" "$1"
+}
+
+download_mp3() {
+  yt-dlp -x --audio-format mp3 -P "$DOWNLOAD_DIR" "$1"
+}
 
 setup_environment() {
   mkdir -p "$DOWNLOAD_DIR"
@@ -45,7 +47,25 @@ download() {
   clear
   echo "Starting download..."
   echo "----------------"
-  yt-dlp ${CONFIG_OPTIONS[$mode]} "$link"
+  if [ "$mode" = "MP4" ]; then
+    download_mp4 "$link"
+  else
+    download_mp3 "$link"
+  fi
+}
+
+download_video() {
+  local video_id=$1
+  local mode=$2
+  local video_url="https://youtube.com/watch?v=$video_id"
+  local title=$(yt-dlp --get-title "$video_url" 2>/dev/null || echo "Unknown Title")
+  echo "Downloading: $title"
+  if [ "$mode" = "MP4" ]; then
+    download_mp4 "$video_url"
+  else
+    download_mp3 "$video_url"
+  fi
+  echo "Completed: $title"
 }
 
 youtube_playlist_download() {
@@ -54,7 +74,11 @@ youtube_playlist_download() {
   read playlist_link
   echo "Getting video list..."
 
-  readarray -t video_ids < <(yt-dlp --flat-playlist --get-id "$playlist_link")
+  local video_ids=()
+  while IFS= read -r id; do
+    [[ -n "$id" ]] && video_ids+=("$id")
+  done < <(yt-dlp --flat-playlist --get-id "$playlist_link")
+
   local total_videos=${#video_ids[@]}
 
   if [ "$total_videos" -eq 0 ]; then
@@ -63,51 +87,31 @@ youtube_playlist_download() {
   fi
 
   echo "Found $total_videos videos. Starting downloads..."
-  local running_downloads=0
-  local completed_downloads=0
-
-  local pipe="/tmp/yt_status_$$"
-  mkfifo "$pipe"
-  exec 3<> "$pipe"
-  rm "$pipe"
-
-  {
-    while read -r line; do
-      clear
-      echo "Total videos: $total_videos"
-      echo "----------------------------------------"
-      echo -e "$line"
-    done <&3
-  } &
-  local display_pid=$!
+  local current=0
+  local running=0
+  local pids=()
 
   for video_id in "${video_ids[@]}"; do
-    while [ $running_downloads -ge $MAX_PARALLEL_DOWNLOADS ]; do
-      wait -n 2>/dev/null || true
-      ((running_downloads--))
-      ((completed_downloads++))
+    while [ $running -ge $MAX_PARALLEL_DOWNLOADS ]; do
+      for pid in "${pids[@]}"; do
+        if ! kill -0 $pid 2>/dev/null; then
+          running=$((running - 1))
+        fi
+      done
+      sleep 1
     done
 
-    {
-      local video_url="https://youtube.com/watch?v=$video_id"
-      local title=$(yt-dlp --get-title "$video_url" 2>/dev/null || echo "Unknown Title")
-      echo "Currently downloading ($completed_downloads/$total_videos):\n$title" >&3
-      yt-dlp ${CONFIG_OPTIONS[$mode]} "$video_url" >/dev/null 2>&1
-    } &
-
-    ((running_downloads++))
+    ((current++))
+    echo "Starting download $current of $total_videos"
+    download_video "$video_id" "$mode" &
+    pids+=($!)
+    ((running++))
   done
 
-  while [ $running_downloads -gt 0 ]; do
-    wait -n 2>/dev/null || true
-    ((running_downloads--))
-    ((completed_downloads++))
+  for pid in "${pids[@]}"; do
+    wait $pid
   done
 
-  kill $display_pid 2>/dev/null || true
-  exec 3>&-
-
-  clear
   echo "All downloads complete!"
 }
 
@@ -116,7 +120,11 @@ parallel_batch_download() {
   [[ ! -f "$BATCH_FILE" ]] && touch "$BATCH_FILE"
   echo "Edit the batch links file. Each line should contain a link. Close the editor to continue."
   $EDITOR "$BATCH_FILE"
-  readarray -t links < "$BATCH_FILE"
+
+  local links=()
+  while IFS= read -r link; do
+    [[ -n "$link" ]] && links+=("$link")
+  done < "$BATCH_FILE"
 
   if [ "${#links[@]}" -eq 0 ]; then
     echo "No links found in batch file"
@@ -125,7 +133,11 @@ parallel_batch_download() {
 
   for link in "${links[@]}"; do
     [[ -z "$link" ]] && continue
-    yt-dlp ${CONFIG_OPTIONS[$mode]} "$link"
+    if [ "$mode" = "MP4" ]; then
+      download_mp4 "$link"
+    else
+      download_mp3 "$link"
+    fi
   done
 }
 
