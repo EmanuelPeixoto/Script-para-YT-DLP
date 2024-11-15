@@ -69,7 +69,7 @@ youtube_playlist_download() {
     local completed_downloads=0
 
     # Create named pipe for status updates
-    local pipe="./tmp/yt_status_$$"
+    local pipe="/tmp/yt_status_$$"
     mkfifo "$pipe"
     exec 3<> "$pipe"
     rm "$pipe"
