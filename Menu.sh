@@ -1,192 +1,165 @@
-CriaEVerifica(){
- echo "Verificando se existem os arquivos necessários"
+#!/usr/bin/env bash
 
-    TEXTMP4L="--recode-video mp4 -P ./Downloads # Melhor qualidade sempre - Força salvar vídeo em mp4 - Seleciona pasta para salvar"
-    TEXTMP3L="-x --audio-format mp3 -P ./Downloads # Melhor qualidade sempre - Só áudio - Força salvar audio em mp3 - Seleciona pasta para salvar"
-    TEXTMP4A="--recode-video mp4 -a lista.txt -P ./Downloads # Melhor qualidade sempre - Força salvar vídeo em mp4 - Ler arquivos em lotes - Seleciona pasta para salvar"
-    TEXTMP3A="-x --audio-format mp3 -a lista.txt -P ./Downloads # Melhor qualidade sempre - Só audio - Força salvar audio em mp3 - Ler arquivos em lotes - Seleciona pasta para salvar"
+# Configuration
+DOWNLOAD_DIR="./Downloads"
+BATCH_FILE="./batch_links.txt"
+EDITOR="${EDITOR:-nvim}"
+MAX_PARALLEL_DOWNLOADS=5
 
-    if [ -d ./Downloads ];
-    then 
-    echo "Pasta Downloads existe."
-    else
-    echo "Criando pasta de Downloads"
-    mkdir Downloads
-    fi
+# YT-DLP configuration options
+declare -A CONFIG_OPTIONS=(
+  ["MP4"]="--recode-video mp4 -P $DOWNLOAD_DIR -f 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]' -q"
+  ["MP3"]="-x --audio-format mp3 -P $DOWNLOAD_DIR -q"
+)
 
-    if [ -d ./Modos ];
-    then
-    echo "Pasta Modos existe."
-    else
-    echo "Criando pasta de Modos"
-    mkdir Modos
-    fi
-
-    if [ -f ./Modos/MP4L.conf ];
-    then
-    echo "Arquivo MP4L já existe."
-    else
-    echo "Criando arquivo MP4L"
-    touch ./Modos/MP4L.conf
-    echo $TEXTMP4L > ./Modos/MP4L.conf
-    fi
-
-    if [ -f ./Modos/MP3L.conf ];
-    then 
-    echo "Arquivo MP3L já existe."
-    else
-    echo "Criando arquivo MP3L"
-    touch ./Modos/MP3L.conf
-    echo $TEXTMP3L > ./Modos/MP3L.conf
-    fi
-
-    if [ -f ./Modos/MP4A.conf ];
-    then 
-    echo "Arquivo MP4A já existe."
-    else
-    echo "Criando arquivo MP4A"
-    touch ./Modos/MP4A.conf
-    echo $TEXTMP4A > ./Modos/MP4A.conf
-    fi
-
-    if [ -f ./Modos/MP3A.conf ];
-    then
-    echo "Arquivo MP3A já existe."
-    else
-    echo "Criando arquivo MP3A"
-    touch ./Modos/MP3A.conf
-    echo $TEXTMP3A > ./Modos/MP3A.conf
-    fi
-
-    echo
-    echo
-    echo
-    echo "Tudo certo, redirecionando para o Menu principal"
-    sleep 3
-    Menu
-
+# Function to create necessary directories
+setup_environment() {
+  mkdir -p "$DOWNLOAD_DIR"
 }
 
-  Menu(){
+# Function to display menu and get user choice
+show_menu() {
   clear
-    echo "Menu de download de arquivos"
-    echo "------------------------------"
-    echo 
-    echo "Escolha enviando o número."
-    echo "1 - MP4 com link."
-    echo "2 - MP3 com link."
-    echo "3 - MP4 com arquivo."
-    echo "4 - MP3 com arquivo."
-    echo
-    echo
-    echo "9 - Sobre o software."
-    echo
-    echo "0 - Sair."
-    echo
-    echo -n "Qual a Opção: "
-    read MODO
+  cat << EOF
+File Download Menu
+------------------------------
+Choose an option by entering the number:
+1 - MP4 with link
+2 - MP3 with link
+3 - MP4 with file
+4 - MP3 with file
+5 - MP4 youtube playlist
+6 - MP3 youtube playlist
 
-    case $MODO in
-    1) MP4L ;;
-    2) MP3L ;;
-    3) MP4A ;;
-    4) MP3A ;;
-    9) clear ; echo "Criado por Emanuel Peixoto" ; echo ; echo "github.com/EmanuelPeixoto" ; echo "Esse software necessita do FFmpeg e YT-DLP instalado" ; echo ; echo "Pressione ENTER para voltar para o Menu principal." ; read ; Menu ;;
-    0) SAIR ;;
-    *) echo ; echo "Opção desconhecida." ; sleep 2 ; Menu ;;
-
-    esac
-
+9 - About the software
+0 - Exit
+EOF
+  read -p "Your choice: " choice
+  echo
+  return "$choice"
 }
 
-    MP4L(){
-    clear
-    echo "Modo MP4 com link carregado."
-    echo -n "Informe o link: "
-    read LINK
-    echo
-    echo
-    yt-dlp --config-location ./Modos/MP4L.conf $LINK
-    Menu_Saida;
-    }
+# Function to handle single downloads
+download() {
+  local mode=$1
+  read -p "Enter the link: " link
+  clear
+  echo "Starting download..."
+  echo "----------------"
+  yt-dlp ${CONFIG_OPTIONS[$mode]} "$link"
+}
 
-    MP3L(){
-    clear
-    echo "Modo MP3 com link carregado."
-    echo -n "Informe o link: "
-    read LINK
-    echo
-    echo
-    yt-dlp --config-location ./Modos/MP3L.conf $LINK
-    Menu_Saida;
-    }
+# Function to handle playlist downloads
+youtube_playlist_download() {
+  local mode=$1
+  read -p "Enter the playlist link: " playlist_link
+  echo "Getting video list..."
 
-    MP4A(){
-    clear
-    echo "Modo MP4 com arquivo carregado."
-    echo "Verificando se existe o arquivo de lista"
-    if [ -f ./lista.txt ];
-    then 
-    echo "O arquivo já existe."
-    echo 
-    echo "Feche o bloco de notas ao terminar de editar o arquivo."
-    nvim ./lista.txt
-    else
-    echo "Criando arquivo."
-    touch lista.txt
-    echo 
-    echo "Feche o bloco de notas ao terminar de editar o arquivo."
-    nvim ./lista.txt
+    # Get playlist information
+    local video_ids=($(yt-dlp --flat-playlist --get-id "$playlist_link"))
+    local total_videos=${#video_ids[@]}
+
+    if [ "$total_videos" -eq 0 ]; then
+      echo "No videos found in playlist"
+      return 1
     fi
-    echo
-    echo
-    yt-dlp --config-location ./Modos/MP4A.conf
-    Menu_Saida;
-    }
-    
-    MP3A(){
+
+    echo "Found $total_videos videos. Starting downloads..."
+    local running_downloads=0
+    local completed_downloads=0
+
+    # Create named pipe for status updates
+    local pipe="./tmp/yt_status_$$"
+    mkfifo "$pipe"
+    exec 3<> "$pipe"
+    rm "$pipe"
+
+    # Background process to update display
+    {
+      while read -r line; do
+        clear
+        echo "Total videos: $total_videos"
+        echo "----------------------------------------"
+        echo -e "$line"
+      done <&3
+    } &
+    local display_pid=$!
+
+    # Process videos in parallel
+    for video_id in "${video_ids[@]}"; do
+      # Wait if max parallel downloads reached
+      while [ $running_downloads -ge $MAX_PARALLEL_DOWNLOADS ]; do
+        wait -n
+        ((running_downloads--))
+        ((completed_downloads++))
+      done
+
+        # Start download in background
+        {
+          local video_url="https://youtube.com/watch?v=$video_id"
+          local title=$(yt-dlp --get-title "$video_url" 2>/dev/null || echo "Unknown Title")
+          echo "Currently downloading ($completed_downloads/$total_videos):\n$title" >&3
+          yt-dlp ${CONFIG_OPTIONS[$mode]} "$video_url" >/dev/null 2>&1
+        } &
+
+        ((running_downloads++))
+      done
+
+    # Wait for remaining downloads
+    while [ $running_downloads -gt 0 ]; do
+      wait -n
+      ((running_downloads--))
+      ((completed_downloads++))
+    done
+
+    # Clean up
+    kill $display_pid
+    exec 3>&-
+
     clear
-    echo "Modo MP3 com arquivo carregado."
-    echo "Verificando se existe o arquivo de lista"
-    if [ -f ./lista.txt ];
-    then
-    echo "O arquivo já existe."
-    echo
-    echo "Feche o bloco de notas ao terminar de editar o arquivo."
-    nvim ./lista.txt
-    else
-    echo "Criando arquivo."
-    touch lista.txt
-    echo
-    echo "Feche o bloco de notas ao terminar de editar o arquivo."
-    nvim ./lista.txt
-    fi
-    echo
-    echo
-    yt-dlp --config-location ./Modos/MP3A.conf
-    Menu_Saida;
-    }
-
-    SAIR(){
-    echo "Saindo..."
-    exit
-    }
-
-
-  Menu_Saida(){
-  echo
-  echo
-  echo
-  echo "Escolha enviando o número."
-  echo "1 - Voltar ao menu principal."
-  echo "0 - Sair."
-  echo -n "Opção: "
-  read MENU
-  case $MENU in
-    1) Menu ;;
-    0) SAIR ;;
-    *) echo ; echo "Opção desconhecida." ; sleep 2 ; Menu_Saida ;;
-  esac
+    echo "All downloads complete!"
   }
 
-CriaEVerifica
+# Function to handle parallel batch downloads
+parallel_batch_download() {
+  local mode=$1
+  [[ ! -f "$BATCH_FILE" ]] && touch "$BATCH_FILE"
+  echo "Edit the batch links file. Each line should contain a link. Close the editor to continue."
+  $EDITOR "$BATCH_FILE"
+  mapfile -t links < "$BATCH_FILE"
+  youtube_playlist_download "$mode" "${links[@]}"
+}
+
+# Function to display about information
+show_about() {
+  clear
+cat << EOF
+Created by Emanuel Peixoto
+github.com/EmanuelPeixoto
+This software requires FFmpeg and YT-DLP to be installed
+EOF
+}
+
+# Main function
+main() {
+  setup_environment
+  while true; do
+    show_menu
+    case $? in
+      1) download "MP4" ;;
+      2) download "MP3" ;;
+      3) parallel_batch_download "MP4" ;;
+      4) parallel_batch_download "MP3" ;;
+      5) youtube_playlist_download "MP4" ;;
+      6) youtube_playlist_download "MP3" ;;
+      9) show_about ;;
+      0) echo "Exiting..."; exit 0 ;;
+      *) echo "Unknown option."; sleep 2 ;;
+    esac
+    echo
+    read -p "Press ENTER to continue or 'q' to quit: " continue
+    [[ "$continue" == "q" ]] && break
+  done
+}
+
+main
