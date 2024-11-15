@@ -34,7 +34,8 @@ Choose an option by entering the number:
 9 - About the software
 0 - Exit
 EOF
-  read -p "Your choice: " choice
+  echo -n "Your choice: "
+  read choice
   echo
   return "$choice"
 }
@@ -42,7 +43,8 @@ EOF
 # Function to handle single downloads
 download() {
   local mode=$1
-  read -p "Enter the link: " link
+  echo -n "Enter the link: "
+  read link
   clear
   echo "Starting download..."
   echo "----------------"
@@ -52,95 +54,94 @@ download() {
 # Function to handle playlist downloads
 youtube_playlist_download() {
   local mode=$1
-  read -p "Enter the playlist link: " playlist_link
+  echo -n "Enter the playlist link: "
+  read playlist_link
   echo "Getting video list..."
 
-    # Get playlist information
-    local video_ids=($(yt-dlp --flat-playlist --get-id "$playlist_link"))
-    local total_videos=${#video_ids[@]}
+  readarray -t video_ids < <(yt-dlp --flat-playlist --get-id "$playlist_link")
+  local total_videos=${#video_ids[@]}
 
-    if [ "$total_videos" -eq 0 ]; then
-      echo "No videos found in playlist"
-      return 1
-    fi
+  if [ "$total_videos" -eq 0 ]; then
+    echo "No videos found in playlist"
+    return 1
+  fi
 
-    echo "Found $total_videos videos. Starting downloads..."
-    local running_downloads=0
-    local completed_downloads=0
+  echo "Found $total_videos videos. Starting downloads..."
+  local running_downloads=0
+  local completed_downloads=0
 
-    # Create named pipe for status updates
-    local pipe="/tmp/yt_status_$$"
-    mkfifo "$pipe"
-    exec 3<> "$pipe"
-    rm "$pipe"
+  local pipe="/tmp/yt_status_$$"
+  mkfifo "$pipe"
+  exec 3<> "$pipe"
+  rm "$pipe"
 
-    # Background process to update display
-    {
-      while read -r line; do
-        clear
-        echo "Total videos: $total_videos"
-        echo "----------------------------------------"
-        echo -e "$line"
-      done <&3
-    } &
-    local display_pid=$!
+  {
+    while read -r line; do
+      clear
+      echo "Total videos: $total_videos"
+      echo "----------------------------------------"
+      echo -e "$line"
+    done <&3
+  } &
+  local display_pid=$!
 
-    # Process videos in parallel
-    for video_id in "${video_ids[@]}"; do
-      # Wait if max parallel downloads reached
-      while [ $running_downloads -ge $MAX_PARALLEL_DOWNLOADS ]; do
-        wait -n
-        ((running_downloads--))
-        ((completed_downloads++))
-      done
-
-        # Start download in background
-        {
-          local video_url="https://youtube.com/watch?v=$video_id"
-          local title=$(yt-dlp --get-title "$video_url" 2>/dev/null || echo "Unknown Title")
-          echo "Currently downloading ($completed_downloads/$total_videos):\n$title" >&3
-          yt-dlp ${CONFIG_OPTIONS[$mode]} "$video_url" >/dev/null 2>&1
-        } &
-
-        ((running_downloads++))
-      done
-
-    # Wait for remaining downloads
-    while [ $running_downloads -gt 0 ]; do
-      wait -n
+  for video_id in "${video_ids[@]}"; do
+    while [ $running_downloads -ge $MAX_PARALLEL_DOWNLOADS ]; do
+      wait -n 2>/dev/null || true
       ((running_downloads--))
       ((completed_downloads++))
     done
 
-    # Clean up
-    kill $display_pid
-    exec 3>&-
+    {
+      local video_url="https://youtube.com/watch?v=$video_id"
+      local title=$(yt-dlp --get-title "$video_url" 2>/dev/null || echo "Unknown Title")
+      echo "Currently downloading ($completed_downloads/$total_videos):\n$title" >&3
+      yt-dlp ${CONFIG_OPTIONS[$mode]} "$video_url" >/dev/null 2>&1
+    } &
 
-    clear
-    echo "All downloads complete!"
-  }
+    ((running_downloads++))
+  done
 
-# Function to handle parallel batch downloads
+  while [ $running_downloads -gt 0 ]; do
+    wait -n 2>/dev/null || true
+    ((running_downloads--))
+    ((completed_downloads++))
+  done
+
+  kill $display_pid 2>/dev/null || true
+  exec 3>&-
+
+  clear
+  echo "All downloads complete!"
+}
+
 parallel_batch_download() {
   local mode=$1
   [[ ! -f "$BATCH_FILE" ]] && touch "$BATCH_FILE"
   echo "Edit the batch links file. Each line should contain a link. Close the editor to continue."
   $EDITOR "$BATCH_FILE"
-  mapfile -t links < "$BATCH_FILE"
-  youtube_playlist_download "$mode" "${links[@]}"
+  readarray -t links < "$BATCH_FILE"
+
+  if [ "${#links[@]}" -eq 0 ]; then
+    echo "No links found in batch file"
+    return 1
+  fi
+
+  for link in "${links[@]}"; do
+    [[ -z "$link" ]] && continue
+    yt-dlp ${CONFIG_OPTIONS[$mode]} "$link"
+  done
 }
 
-# Function to display about information
 show_about() {
   clear
-cat << EOF
+  cat << EOF
 Created by Emanuel Peixoto
 github.com/EmanuelPeixoto
 This software requires FFmpeg and YT-DLP to be installed
 EOF
 }
 
-# Main function
 main() {
   setup_environment
   while true; do
@@ -157,7 +158,8 @@ main() {
       *) echo "Unknown option."; sleep 2 ;;
     esac
     echo
-    read -p "Press ENTER to continue or 'q' to quit: " continue
+    echo -n "Press ENTER to continue or 'q' to quit: "
+    read continue
     [[ "$continue" == "q" ]] && break
   done
 }
